@@ -1,31 +1,30 @@
-// A doctor who sees one patient at a time.
 public class Doctor {
     private String name;
     private String speciality;
-    private Patient current;    // null when the doctor is free
-    private int endTime;        // clock minute when the current consultation finishes
+    private Patient currentPatient;
+    private int consultationEndTime;
 
     public Doctor(String name, String speciality) {
         this.name = name;
         this.speciality = speciality;
-        this.current = null;
+        this.currentPatient = null;
     }
 
     public String getName() { return name; }
     public String getSpeciality() { return speciality; }
-    public Patient getCurrent() { return current; }
-    public int getEndTime() { return endTime; }
+    public Patient getCurrentPatient() { return currentPatient; }
+    public int getConsultationEndTime() { return consultationEndTime; }
 
     public boolean isFree() {
-        return current == null;
+        return currentPatient == null;
     }
 
-    public void start(Patient p, int endTime) {
-        this.current = p;
-        this.endTime = endTime;
+    public void startConsultation(Patient patient, int consultationEndTime) {
+        this.currentPatient = patient;
+        this.consultationEndTime = consultationEndTime;
     }
 
-    public void finish() {
-        this.current = null;
+    public void finishConsultation() {
+        this.currentPatient = null;
     }
 }

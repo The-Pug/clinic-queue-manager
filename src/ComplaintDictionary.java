@@ -2,42 +2,38 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 
-// Remembers how urgent each complaint is: complaint -> priority number.
 public class ComplaintDictionary {
-    private HashMap<String, Integer> priorities = new HashMap<String, Integer>();
+    private HashMap<String, Integer> priorityByComplaint = new HashMap<String, Integer>();
 
     public ComplaintDictionary() {
-        priorities.put("cardiac arrest", 1);
-        priorities.put("severe bleeding", 1);
-        priorities.put("breathing trouble", 1);
-        priorities.put("fracture", 2);
-        priorities.put("high fever", 3);
-        priorities.put("vomiting", 3);
-        priorities.put("minor cut", 4);
-        priorities.put("routine checkup", 5);
+        priorityByComplaint.put("cardiac arrest", 1);
+        priorityByComplaint.put("severe bleeding", 1);
+        priorityByComplaint.put("breathing trouble", 1);
+        priorityByComplaint.put("fracture", 2);
+        priorityByComplaint.put("high fever", 3);
+        priorityByComplaint.put("vomiting", 3);
+        priorityByComplaint.put("minor cut", 4);
+        priorityByComplaint.put("routine checkup", 5);
     }
 
-    // Add a new complaint or change an old one.
-    public void add(String complaint, int priority) {
-        if (priority < 1 || priority > 5) {
+    public void addComplaint(String complaintName, int priorityNumber) {
+        if (priorityNumber < 1 || priorityNumber > 5) {
             throw new IllegalArgumentException("Priority must be between 1 and 5");
         }
-        priorities.put(complaint.trim().toLowerCase(), priority);
+        priorityByComplaint.put(complaintName.trim().toLowerCase(), priorityNumber);
     }
 
-    // Unknown complaints are treated as routine (5).
-    public int getPriority(String complaint) {
-        String key = complaint.trim().toLowerCase();
-        if (priorities.containsKey(key)) {
-            return priorities.get(key);
+    public int getPriorityFor(String complaintName) {
+        String complaintKey = complaintName.trim().toLowerCase();
+        if (priorityByComplaint.containsKey(complaintKey)) {
+            return priorityByComplaint.get(complaintKey);
         }
         return 5;
     }
 
-    // All complaint names in alphabetical order (for the drop-down list).
-    public ArrayList<String> getNames() {
-        ArrayList<String> names = new ArrayList<String>(priorities.keySet());
-        Collections.sort(names);
-        return names;
+    public ArrayList<String> getComplaintNames() {
+        ArrayList<String> complaintNames = new ArrayList<String>(priorityByComplaint.keySet());
+        Collections.sort(complaintNames);
+        return complaintNames;
     }
 }

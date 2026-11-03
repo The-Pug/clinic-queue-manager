@@ -1,61 +1,55 @@
-// Small checks. Run with: java -cp out ClinicTests
 public class ClinicTests {
-    static int failed = 0;
+    static int failedCount = 0;
 
-    static void check(String what, boolean ok) {
-        if (ok) {
-            System.out.println("ok    " + what);
+    static void checkResult(String description, boolean passed) {
+        if (passed) {
+            System.out.println("ok    " + description);
         } else {
-            System.out.println("FAIL  " + what);
-            failed++;
+            System.out.println("FAIL  " + description);
+            failedCount++;
         }
     }
 
     public static void main(String[] args) {
-        // 1. urgent patient comes first
-        Clinic c = new Clinic();
-        c.addPatient("Ravi", 30, "routine checkup");
-        c.addPatient("Hari", 61, "cardiac arrest");
-        check("urgent patient is first", c.getWaiting().get(0).getName().equals("Hari"));
+        Clinic orderClinic = new Clinic();
+        orderClinic.addPatient("Ravi", 30, "routine checkup");
+        orderClinic.addPatient("Hari", 61, "cardiac arrest");
+        checkResult("urgent patient is first", orderClinic.getWaitingPatients().get(0).getName().equals("Hari"));
 
-        // 2. same priority: who came first goes first
-        Clinic c2 = new Clinic();
-        c2.addPatient("First", 20, "high fever");
-        c2.addPatient("Second", 21, "vomiting");
-        check("tie: arrival order", c2.getWaiting().get(0).getName().equals("First"));
+        Clinic tieClinic = new Clinic();
+        tieClinic.addPatient("First", 20, "high fever");
+        tieClinic.addPatient("Second", 21, "vomiting");
+        checkResult("tie: arrival order", tieClinic.getWaitingPatients().get(0).getName().equals("First"));
 
-        // 3. unknown complaint is routine
-        Patient odd = c2.addPatient("Odd", 40, "strange itch");
-        check("unknown complaint gets priority 5", odd.getPriority() == 5);
+        Patient unknownComplaintPatient = tieClinic.addPatient("Odd", 40, "strange itch");
+        checkResult("unknown complaint gets priority 5", unknownComplaintPatient.getPriority() == 5);
 
-        // 4. escalate moves a patient up the queue
-        Clinic c3 = new Clinic();
-        c3.addPatient("A", 20, "high fever");        // priority 3
-        Patient b = c3.addPatient("B", 20, "minor cut");   // priority 4
-        c3.escalate(b.getId());                       // now 3, but A came first
-        c3.escalate(b.getId());                       // now 2, ahead of A
-        check("escalate moves patient to front", c3.getWaiting().get(0) == b);
+        Clinic escalateClinic = new Clinic();
+        escalateClinic.addPatient("A", 20, "high fever");
+        Patient cutPatient = escalateClinic.addPatient("B", 20, "minor cut");
+        escalateClinic.escalatePatient(cutPatient.getPatientId());
+        escalateClinic.escalatePatient(cutPatient.getPatientId());
+        checkResult("escalate moves patient to front", escalateClinic.getWaitingPatients().get(0) == cutPatient);
 
-        // 5. a doctor is busy until the time is over
-        Clinic c4 = new Clinic();
-        for (int i = 0; i < 4; i++) {
-            c4.addPatient("P" + i, 30, "routine checkup");   // 10 minutes each
+        Clinic doctorClinic = new Clinic();
+        for (int number = 0; number < 4; number++) {
+            doctorClinic.addPatient("P" + number, 30, "routine checkup");
         }
-        c4.callNext();
-        c4.callNext();
-        c4.callNext();
+        doctorClinic.callNextPatient();
+        doctorClinic.callNextPatient();
+        doctorClinic.callNextPatient();
         boolean noFreeDoctor = false;
         try {
-            c4.callNext();
-        } catch (IllegalStateException e) {
+            doctorClinic.callNextPatient();
+        } catch (IllegalStateException exception) {
             noFreeDoctor = true;
         }
-        c4.tick(10);
-        c4.callNext();
-        check("doctors busy until time is over", noFreeDoctor && c4.getWaitingCount() == 0);
+        doctorClinic.advanceClock(10);
+        doctorClinic.callNextPatient();
+        checkResult("doctors busy until time is over", noFreeDoctor && doctorClinic.getWaitingCount() == 0);
 
-        System.out.println(failed == 0 ? "All checks passed" : failed + " check(s) failed");
-        if (failed > 0) {
+        System.out.println(failedCount == 0 ? "All checks passed" : failedCount + " check(s) failed");
+        if (failedCount > 0) {
             System.exit(1);
         }
     }

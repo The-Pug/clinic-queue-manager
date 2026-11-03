@@ -8,45 +8,41 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 
-// The window: a form with three boxes, the queue table, doctor panels and a statistics box.
 public class ClinicWindow extends JFrame {
     private Clinic clinic;
 
-    // colours for priority 1 (urgent) to 5 (routine)
-    private Color[] rowColours = {new Color(255, 205, 210), new Color(255, 224, 178), new Color(255, 249, 196),
+    private Color[] priorityColours = {new Color(255, 205, 210), new Color(255, 224, 178), new Color(255, 249, 196),
             new Color(220, 237, 200), new Color(187, 222, 251)};
     private Color darkBlue = new Color(31, 78, 95);
-    private Color pageColour = new Color(244, 246, 248);
+    private Color pageBackground = new Color(244, 246, 248);
 
-    // the three boxes of the form
     private JTextField nameField = new JTextField();
     private JTextField ageField = new JTextField();
-    private JComboBox<String> complaintBox = new JComboBox<String>();
+    private JComboBox<String> complaintDropdown = new JComboBox<String>();
 
     private JLabel messageLabel = new JLabel(" ");
     private JLabel clockLabel = new JLabel();
-    private DefaultTableModel tableModel;
-    private JTable table;
-    private JTextArea statsArea = new JTextArea();
+    private DefaultTableModel queueTableModel;
+    private JTable queueTable;
+    private JTextArea statisticsArea = new JTextArea();
     private JPanel doctorPanel = new JPanel(new GridLayout(1, 0, 10, 0));
-    private ArrayList<DoctorCard> cards = new ArrayList<DoctorCard>();
+    private ArrayList<DoctorCard> doctorCards = new ArrayList<DoctorCard>();
 
     public ClinicWindow(Clinic clinic) {
         super("Clinic Queue - Team 29");
         this.clinic = clinic;
         try {
-            // Nimbus looks nicer than the default grey style (if it is missing we keep the default)
-            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-                if (info.getName().equals("Nimbus")) {
-                    UIManager.setLookAndFeel(info.getClassName());
+            for (UIManager.LookAndFeelInfo lookAndFeelInfo : UIManager.getInstalledLookAndFeels()) {
+                if (lookAndFeelInfo.getName().equals("Nimbus")) {
+                    UIManager.setLookAndFeel(lookAndFeelInfo.getClassName());
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception exception) {
             System.out.println("Using the default look");
         }
 
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        getContentPane().setBackground(pageColour);
+        getContentPane().setBackground(pageBackground);
         setLayout(new BorderLayout(10, 10));
 
         add(makeHeader(), BorderLayout.NORTH);
@@ -54,308 +50,295 @@ public class ClinicWindow extends JFrame {
         add(makeQueueArea(), BorderLayout.CENTER);
         add(makeDoctorArea(), BorderLayout.SOUTH);
 
-        // Redraw every second so patients added through the web address show up too.
-        Timer timer = new Timer(1000, new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                refresh();
+        Timer refreshTimer = new Timer(1000, new ActionListener() {
+            public void actionPerformed(ActionEvent event) {
+                refreshScreen();
             }
         });
-        timer.start();
+        refreshTimer.start();
 
-        refresh();
+        refreshScreen();
         setSize(1100, 700);
         setLocationRelativeTo(null);
     }
-
-    // ----- building the parts of the window -----
 
     private JPanel makeHeader() {
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(darkBlue);
         header.setBorder(new EmptyBorder(10, 16, 10, 16));
-        JLabel title = new JLabel("Clinic Queue");
-        title.setFont(new Font("SansSerif", Font.BOLD, 22));
-        title.setForeground(Color.WHITE);
+        JLabel titleLabel = new JLabel("Clinic Queue");
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 22));
+        titleLabel.setForeground(Color.WHITE);
         clockLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
         clockLabel.setForeground(Color.WHITE);
-        header.add(title, BorderLayout.WEST);
+        header.add(titleLabel, BorderLayout.WEST);
         header.add(clockLabel, BorderLayout.EAST);
         return header;
     }
 
-    // Left side: the add-patient form on top, the statistics below it.
     private JPanel makeLeftSide() {
-        JPanel form = new JPanel();
-        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.setBackground(Color.WHITE);
-        form.setBorder(BorderFactory.createCompoundBorder(
+        JPanel formPanel = new JPanel();
+        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
+        formPanel.setBackground(Color.WHITE);
+        formPanel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createTitledBorder("New patient"), new EmptyBorder(6, 10, 10, 10)));
 
-        for (String name : clinic.getDictionary().getNames()) {
-            complaintBox.addItem(name);
+        for (String complaintName : clinic.getComplaintDictionary().getComplaintNames()) {
+            complaintDropdown.addItem(complaintName);
         }
-        complaintBox.setSelectedItem("routine checkup");
+        complaintDropdown.setSelectedItem("routine checkup");
 
-        addFormRow(form, "Name", nameField);
-        addFormRow(form, "Age", ageField);
-        addFormRow(form, "Complaint", complaintBox);
+        addFormRow(formPanel, "Name", nameField);
+        addFormRow(formPanel, "Age", ageField);
+        addFormRow(formPanel, "Complaint", complaintDropdown);
 
         JButton addButton = makeButton("Add to queue", new Color(46, 125, 50));
         addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
         addButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         ActionListener addAction = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                addPatient();
+            public void actionPerformed(ActionEvent event) {
+                addPatientFromForm();
             }
         };
         addButton.addActionListener(addAction);
-        nameField.addActionListener(addAction);     // pressing Enter in a box also adds
+        nameField.addActionListener(addAction);
         ageField.addActionListener(addAction);
-        form.add(Box.createVerticalStrut(10));
-        form.add(addButton);
+        formPanel.add(Box.createVerticalStrut(10));
+        formPanel.add(addButton);
 
         messageLabel.setBorder(new EmptyBorder(8, 2, 0, 2));
         messageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        form.add(messageLabel);
+        formPanel.add(messageLabel);
 
-        statsArea.setEditable(false);
-        statsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        statsArea.setMargin(new Insets(6, 8, 6, 8));
-        JScrollPane statsScroll = new JScrollPane(statsArea);
-        statsScroll.setBorder(BorderFactory.createTitledBorder("Statistics"));
+        statisticsArea.setEditable(false);
+        statisticsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        statisticsArea.setMargin(new Insets(6, 8, 6, 8));
+        JScrollPane statisticsScroll = new JScrollPane(statisticsArea);
+        statisticsScroll.setBorder(BorderFactory.createTitledBorder("Statistics"));
 
-        JPanel left = new JPanel(new BorderLayout(0, 10));
-        left.setOpaque(false);
-        left.setPreferredSize(new Dimension(290, 400));
-        left.add(form, BorderLayout.NORTH);
-        left.add(statsScroll, BorderLayout.CENTER);
-        return left;
+        JPanel leftSide = new JPanel(new BorderLayout(0, 10));
+        leftSide.setOpaque(false);
+        leftSide.setPreferredSize(new Dimension(290, 400));
+        leftSide.add(formPanel, BorderLayout.NORTH);
+        leftSide.add(statisticsScroll, BorderLayout.CENTER);
+        return leftSide;
     }
 
-    // One label with its box under it.
-    private void addFormRow(JPanel form, String labelText, JComponent box) {
-        JLabel label = new JLabel(labelText);
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        label.setBorder(new EmptyBorder(6, 0, 2, 0));
-        box.setAlignmentX(Component.LEFT_ALIGNMENT);
-        box.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        box.setPreferredSize(new Dimension(200, 30));
-        form.add(label);
-        form.add(box);
+    private void addFormRow(JPanel formPanel, String labelText, JComponent inputBox) {
+        JLabel rowLabel = new JLabel(labelText);
+        rowLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        rowLabel.setBorder(new EmptyBorder(6, 0, 2, 0));
+        inputBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        inputBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        inputBox.setPreferredSize(new Dimension(200, 30));
+        formPanel.add(rowLabel);
+        formPanel.add(inputBox);
     }
 
     private JPanel makeQueueArea() {
-        String[] columns = {"#", "ID", "Name", "Age", "Complaint", "Priority", "Waited (min)"};
-        tableModel = new DefaultTableModel(columns, 0) {
+        String[] columnNames = {"#", "ID", "Name", "Age", "Complaint", "Priority", "Waited (min)"};
+        queueTableModel = new DefaultTableModel(columnNames, 0) {
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
-        table = new JTable(tableModel);
-        table.setRowHeight(28);
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13));
-        table.setDefaultRenderer(Object.class, new RowColour());
-        table.getColumnModel().getColumn(0).setMaxWidth(40);
-        table.getColumnModel().getColumn(1).setMaxWidth(50);
+        queueTable = new JTable(queueTableModel);
+        queueTable.setRowHeight(28);
+        queueTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        queueTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13));
+        queueTable.setDefaultRenderer(Object.class, new PriorityRowColour());
+        queueTable.getColumnModel().getColumn(0).setMaxWidth(40);
+        queueTable.getColumnModel().getColumn(1).setMaxWidth(50);
 
-        JScrollPane scroll = new JScrollPane(table);
-        scroll.setBorder(BorderFactory.createTitledBorder("Waiting queue (first row is called next)"));
+        JScrollPane queueScroll = new JScrollPane(queueTable);
+        queueScroll.setBorder(BorderFactory.createTitledBorder("Waiting queue (first row is called next)"));
 
-        // buttons under the table
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        buttons.setOpaque(false);
-        JButton nextButton = makeButton("Call next", darkBlue);
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        buttonPanel.setOpaque(false);
+        JButton callNextButton = makeButton("Call next", darkBlue);
         JButton escalateButton = makeButton("Escalate selected", new Color(230, 126, 34));
-        JButton tick5 = makeButton("Tick +5 min", new Color(96, 125, 139));
-        JButton tick15 = makeButton("Tick +15 min", new Color(96, 125, 139));
-        nextButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                callNext();
+        JButton tickFiveButton = makeButton("Tick +5 min", new Color(96, 125, 139));
+        JButton tickFifteenButton = makeButton("Tick +15 min", new Color(96, 125, 139));
+        callNextButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent event) {
+                callNextPatient();
             }
         });
         escalateButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                escalateSelected();
+            public void actionPerformed(ActionEvent event) {
+                escalateSelectedPatient();
             }
         });
-        tick5.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                clinic.tick(5);
+        tickFiveButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent event) {
+                clinic.advanceClock(5);
                 showMessage("Clock moved 5 minutes", true);
-                refresh();
+                refreshScreen();
             }
         });
-        tick15.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                clinic.tick(15);
+        tickFifteenButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent event) {
+                clinic.advanceClock(15);
                 showMessage("Clock moved 15 minutes", true);
-                refresh();
+                refreshScreen();
             }
         });
-        buttons.add(nextButton);
-        buttons.add(escalateButton);
-        buttons.add(tick5);
-        buttons.add(tick15);
+        buttonPanel.add(callNextButton);
+        buttonPanel.add(escalateButton);
+        buttonPanel.add(tickFiveButton);
+        buttonPanel.add(tickFifteenButton);
 
-        // small colour key
-        JPanel key = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 4));
-        key.setOpaque(false);
-        String[] names = {"1 urgent", "2", "3", "4", "5 routine"};
-        for (int i = 0; i < 5; i++) {
-            JLabel box = new JLabel(" " + names[i] + " ");
-            box.setOpaque(true);
-            box.setBackground(rowColours[i]);
-            box.setBorder(new LineBorder(Color.GRAY));
-            key.add(box);
+        JPanel colourKey = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 4));
+        colourKey.setOpaque(false);
+        String[] keyNames = {"1 urgent", "2", "3", "4", "5 routine"};
+        for (int index = 0; index < 5; index++) {
+            JLabel keyLabel = new JLabel(" " + keyNames[index] + " ");
+            keyLabel.setOpaque(true);
+            keyLabel.setBackground(priorityColours[index]);
+            keyLabel.setBorder(new LineBorder(Color.GRAY));
+            colourKey.add(keyLabel);
         }
 
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.setOpaque(false);
-        bottom.add(buttons, BorderLayout.WEST);
-        bottom.add(key, BorderLayout.EAST);
+        JPanel bottomBar = new JPanel(new BorderLayout());
+        bottomBar.setOpaque(false);
+        bottomBar.add(buttonPanel, BorderLayout.WEST);
+        bottomBar.add(colourKey, BorderLayout.EAST);
 
-        JPanel area = new JPanel(new BorderLayout(0, 6));
-        area.setOpaque(false);
-        area.add(scroll, BorderLayout.CENTER);
-        area.add(bottom, BorderLayout.SOUTH);
-        return area;
+        JPanel queueArea = new JPanel(new BorderLayout(0, 6));
+        queueArea.setOpaque(false);
+        queueArea.add(queueScroll, BorderLayout.CENTER);
+        queueArea.add(bottomBar, BorderLayout.SOUTH);
+        return queueArea;
     }
 
     private JPanel makeDoctorArea() {
         doctorPanel.setOpaque(false);
-        for (Doctor d : clinic.getDoctors()) {
-            DoctorCard card = new DoctorCard(d);
-            cards.add(card);
-            doctorPanel.add(card);
+        for (Doctor doctor : clinic.getDoctorList()) {
+            DoctorCard doctorCard = new DoctorCard(doctor);
+            doctorCards.add(doctorCard);
+            doctorPanel.add(doctorCard);
         }
-        JPanel area = new JPanel(new BorderLayout());
-        area.setOpaque(false);
-        area.setBorder(BorderFactory.createTitledBorder("Doctors"));
-        area.setPreferredSize(new Dimension(400, 130));
-        area.add(doctorPanel, BorderLayout.CENTER);
-        return area;
+        JPanel doctorArea = new JPanel(new BorderLayout());
+        doctorArea.setOpaque(false);
+        doctorArea.setBorder(BorderFactory.createTitledBorder("Doctors"));
+        doctorArea.setPreferredSize(new Dimension(400, 130));
+        doctorArea.add(doctorPanel, BorderLayout.CENTER);
+        return doctorArea;
     }
 
     private JButton makeButton(String text, Color colour) {
-        JButton b = new JButton(text);
-        b.setBackground(colour);
-        b.setForeground(Color.WHITE);
-        b.setFont(new Font("SansSerif", Font.BOLD, 13));
-        b.setFocusPainted(false);
-        return b;
+        JButton button = new JButton(text);
+        button.setBackground(colour);
+        button.setForeground(Color.WHITE);
+        button.setFont(new Font("SansSerif", Font.BOLD, 13));
+        button.setFocusPainted(false);
+        return button;
     }
 
-    // ----- what the buttons do -----
-
-    private void addPatient() {
+    private void addPatientFromForm() {
         try {
             int age = Integer.parseInt(ageField.getText().trim());
-            Patient p = clinic.addPatient(nameField.getText(), age, (String) complaintBox.getSelectedItem());
-            showMessage("Added " + p.getName() + " (priority " + p.getPriority() + ")", true);
+            Patient patient = clinic.addPatient(nameField.getText(), age, (String) complaintDropdown.getSelectedItem());
+            showMessage("Added " + patient.getName() + " (priority " + patient.getPriority() + ")", true);
             nameField.setText("");
             ageField.setText("");
             nameField.requestFocusInWindow();
-        } catch (NumberFormatException ex) {
+        } catch (NumberFormatException exception) {
             showMessage("Age must be a number", false);
-        } catch (IllegalArgumentException ex) {
-            showMessage(ex.getMessage(), false);
+        } catch (IllegalArgumentException exception) {
+            showMessage(exception.getMessage(), false);
         }
-        refresh();
+        refreshScreen();
     }
 
-    private void callNext() {
+    private void callNextPatient() {
         try {
-            Doctor d = clinic.callNext();
-            showMessage(d.getName() + " is now seeing " + d.getCurrent().getName(), true);
-        } catch (IllegalStateException ex) {
-            showMessage(ex.getMessage(), false);
+            Doctor doctor = clinic.callNextPatient();
+            showMessage(doctor.getName() + " is now seeing " + doctor.getCurrentPatient().getName(), true);
+        } catch (IllegalStateException exception) {
+            showMessage(exception.getMessage(), false);
         }
-        refresh();
+        refreshScreen();
     }
 
-    private void escalateSelected() {
-        int row = table.getSelectedRow();
-        if (row < 0) {
+    private void escalateSelectedPatient() {
+        int selectedRow = queueTable.getSelectedRow();
+        if (selectedRow < 0) {
             showMessage("Click a patient in the table first", false);
             return;
         }
-        int id = (Integer) tableModel.getValueAt(row, 1);
+        int patientId = (Integer) queueTableModel.getValueAt(selectedRow, 1);
         try {
-            Patient p = clinic.escalate(id);
-            showMessage(p.getName() + " is now priority " + p.getPriority(), true);
-        } catch (IllegalStateException ex) {
-            showMessage(ex.getMessage(), false);
+            Patient patient = clinic.escalatePatient(patientId);
+            showMessage(patient.getName() + " is now priority " + patient.getPriority(), true);
+        } catch (IllegalStateException exception) {
+            showMessage(exception.getMessage(), false);
         }
-        refresh();
+        refreshScreen();
     }
 
-    private void showMessage(String text, boolean good) {
-        messageLabel.setForeground(good ? new Color(27, 94, 32) : new Color(183, 28, 28));
+    private void showMessage(String text, boolean wentWell) {
+        messageLabel.setForeground(wentWell ? new Color(27, 94, 32) : new Color(183, 28, 28));
         messageLabel.setText("<html>" + text + "</html>");
     }
 
-    // ----- redrawing -----
+    private void refreshScreen() {
+        clockLabel.setText("Time: " + clinic.getClockMinutes() + " min");
 
-    // Reads everything from the clinic again and redraws the table, doctors and statistics.
-    private void refresh() {
-        clockLabel.setText("Time: " + clinic.getClock() + " min");
-
-        int selectedId = -1;
-        if (table.getSelectedRow() >= 0) {
-            selectedId = (Integer) tableModel.getValueAt(table.getSelectedRow(), 1);
+        int selectedPatientId = -1;
+        if (queueTable.getSelectedRow() >= 0) {
+            selectedPatientId = (Integer) queueTableModel.getValueAt(queueTable.getSelectedRow(), 1);
         }
-        tableModel.setRowCount(0);
-        ArrayList<Patient> waiting = clinic.getWaiting();
-        for (int i = 0; i < waiting.size(); i++) {
-            Patient p = waiting.get(i);
-            Object[] row = {i + 1, p.getId(), p.getName(), p.getAge(), p.getComplaint(),
-                    p.getPriority(), clinic.getWaitedSoFar(p)};
-            tableModel.addRow(row);
-            if (p.getId() == selectedId) {
-                table.setRowSelectionInterval(i, i);     // keep the same patient selected
+        queueTableModel.setRowCount(0);
+        ArrayList<Patient> waitingPatients = clinic.getWaitingPatients();
+        for (int index = 0; index < waitingPatients.size(); index++) {
+            Patient patient = waitingPatients.get(index);
+            Object[] rowValues = {index + 1, patient.getPatientId(), patient.getName(), patient.getAge(),
+                    patient.getComplaint(), patient.getPriority(), clinic.getWaitedMinutes(patient)};
+            queueTableModel.addRow(rowValues);
+            if (patient.getPatientId() == selectedPatientId) {
+                queueTable.setRowSelectionInterval(index, index);
             }
         }
 
-        for (int i = 0; i < cards.size(); i++) {
-            cards.get(i).update();
+        for (int index = 0; index < doctorCards.size(); index++) {
+            doctorCards.get(index).update();
         }
 
-        String text = "Waiting now: " + clinic.getWaitingCount() + "\n";
-        text += "Seen so far:  " + clinic.getTotalSeen() + "\n\n";
-        text += String.format("%-5s %5s %8s %5s%n", "Prio", "Seen", "AvgWait", "Max");
-        for (int level = 1; level <= 5; level++) {
-            text += String.format("%-5d %5d %8.1f %5d%n", level, clinic.getSeen(level),
-                    clinic.getAverageWait(level), clinic.getMaxWait(level));
+        String statisticsText = "Waiting now: " + clinic.getWaitingCount() + "\n";
+        statisticsText += "Seen so far:  " + clinic.getTotalSeenCount() + "\n\n";
+        statisticsText += String.format("%-5s %5s %8s %5s%n", "Prio", "Seen", "AvgWait", "Max");
+        for (int priorityLevel = 1; priorityLevel <= 5; priorityLevel++) {
+            statisticsText += String.format("%-5d %5d %8.1f %5d%n", priorityLevel, clinic.getSeenCount(priorityLevel),
+                    clinic.getAverageWaitMinutes(priorityLevel), clinic.getMaxWaitMinutes(priorityLevel));
         }
-        statsArea.setText(text);
+        statisticsArea.setText(statisticsText);
     }
 
-    // Colours each row by its priority and centres the number columns.
-    private class RowColour extends DefaultTableCellRenderer {
-        public Component getTableCellRendererComponent(JTable t, Object value, boolean selected,
-                boolean focus, int row, int column) {
-            Component c = super.getTableCellRendererComponent(t, value, selected, focus, row, column);
+    private class PriorityRowColour extends DefaultTableCellRenderer {
+        public Component getTableCellRendererComponent(JTable tableBeingDrawn, Object value, boolean isSelected,
+                boolean hasFocus, int row, int column) {
+            Component cellComponent = super.getTableCellRendererComponent(tableBeingDrawn, value, isSelected,
+                    hasFocus, row, column);
             if (column == 2 || column == 4) {
                 setHorizontalAlignment(LEFT);
             } else {
                 setHorizontalAlignment(CENTER);
             }
-            if (!selected) {
-                int priority = (Integer) t.getValueAt(row, 5);
-                c.setBackground(rowColours[priority - 1]);
-                c.setForeground(Color.BLACK);
+            if (!isSelected) {
+                int priority = (Integer) tableBeingDrawn.getValueAt(row, 5);
+                cellComponent.setBackground(priorityColours[priority - 1]);
+                cellComponent.setForeground(Color.BLACK);
             }
-            return c;
+            return cellComponent;
         }
     }
 
-    // One panel per doctor: name, who they are seeing and a progress bar.
     private class DoctorCard extends JPanel {
         private Doctor doctor;
         private JLabel nameLabel = new JLabel();
         private JLabel statusLabel = new JLabel();
-        private JProgressBar bar = new JProgressBar(0, 100);
+        private JProgressBar progressBar = new JProgressBar(0, 100);
 
         public DoctorCard(Doctor doctor) {
             this.doctor = doctor;
@@ -363,26 +346,26 @@ public class ClinicWindow extends JFrame {
             setBorder(BorderFactory.createCompoundBorder(new LineBorder(Color.GRAY), new EmptyBorder(6, 10, 6, 10)));
             nameLabel.setText(doctor.getName() + " (" + doctor.getSpeciality() + ")");
             nameLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
-            bar.setStringPainted(true);
+            progressBar.setStringPainted(true);
             add(nameLabel);
             add(statusLabel);
-            add(bar);
+            add(progressBar);
         }
 
         public void update() {
-            Patient p = doctor.getCurrent();
-            if (p == null) {
+            Patient currentPatient = doctor.getCurrentPatient();
+            if (currentPatient == null) {
                 setBackground(new Color(232, 245, 233));
                 statusLabel.setText("Free");
-                bar.setValue(0);
-                bar.setString("");
+                progressBar.setValue(0);
+                progressBar.setString("");
             } else {
                 setBackground(new Color(255, 243, 224));
-                statusLabel.setText("Seeing " + p.getName() + " (priority " + p.getPriority() + ")");
-                int total = 35 - 5 * p.getPriority();
-                int left = doctor.getEndTime() - clinic.getClock();
-                bar.setValue(100 * (total - left) / total);
-                bar.setString(left + " min left");
+                statusLabel.setText("Seeing " + currentPatient.getName() + " (priority " + currentPatient.getPriority() + ")");
+                int totalMinutes = 35 - 5 * currentPatient.getPriority();
+                int minutesLeft = doctor.getConsultationEndTime() - clinic.getClockMinutes();
+                progressBar.setValue(100 * (totalMinutes - minutesLeft) / totalMinutes);
+                progressBar.setString(minutesLeft + " min left");
             }
         }
     }

@@ -3,40 +3,38 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
-// The clinic: one priority queue of waiting patients, some doctors and a clock.
-// The methods are "synchronized" so the window and the web server never change things at the same moment.
 public class Clinic {
-    private int clock = 0;                 // minutes
-    private int nextId = 1;
-    private ComplaintDictionary dictionary = new ComplaintDictionary();
-    private ArrayList<Doctor> doctors = new ArrayList<Doctor>();
-    private ArrayList<Patient> allPatients = new ArrayList<Patient>();
+    private int clockMinutes = 0;
+    private int nextPatientId = 1;
+    private ComplaintDictionary complaintDictionary = new ComplaintDictionary();
+    private ArrayList<Doctor> doctorList = new ArrayList<Doctor>();
+    private ArrayList<Patient> patientList = new ArrayList<Patient>();
 
-    // Lowest priority number first. If it is a tie, the patient who came first (smaller id) goes first.
-    private Comparator<Patient> order = new Comparator<Patient>() {
-        public int compare(Patient a, Patient b) {
-            if (a.getPriority() != b.getPriority()) {
-                return a.getPriority() - b.getPriority();
+    private Comparator<Patient> patientOrder = new Comparator<Patient>() {
+        public int compare(Patient firstPatient, Patient secondPatient) {
+            if (firstPatient.getPriority() != secondPatient.getPriority()) {
+                return firstPatient.getPriority() - secondPatient.getPriority();
             }
-            return a.getId() - b.getId();
+            return firstPatient.getPatientId() - secondPatient.getPatientId();
         }
     };
-    private PriorityQueue<Patient> queue = new PriorityQueue<Patient>(11, order);
 
-    // numbers for the statistics, index 1..5 = priority when the patient was called
-    private int[] seenByPriority = new int[6];
-    private int[] waitByPriority = new int[6];
+    private PriorityQueue<Patient> waitingQueue = new PriorityQueue<Patient>(11, patientOrder);
+
+    private int[] seenCountByPriority = new int[6];
+    private int[] totalWaitByPriority = new int[6];
     private int[] maxWaitByPriority = new int[6];
 
     public Clinic() {
-        doctors.add(new Doctor("Dr. Sharma", "General"));
-        doctors.add(new Doctor("Dr. Verma", "Emergency"));
-        doctors.add(new Doctor("Dr. Khan", "Paediatrics"));
+        doctorList.add(new Doctor("Dr. Sharma", "General"));
+        doctorList.add(new Doctor("Dr. Verma", "Emergency"));
+        doctorList.add(new Doctor("Dr. Khan", "Paediatrics"));
     }
 
-    public ComplaintDictionary getDictionary() { return dictionary; }
-    public synchronized int getClock() { return clock; }
-    public synchronized ArrayList<Doctor> getDoctors() { return new ArrayList<Doctor>(doctors); }
+    public ComplaintDictionary getComplaintDictionary() { return complaintDictionary; }
+    public synchronized int getClockMinutes() { return clockMinutes; }
+
+    public synchronized ArrayList<Doctor> getDoctorList() { return new ArrayList<Doctor>(doctorList); }
 
     public synchronized Patient addPatient(String name, int age, String complaint) {
         if (name == null || name.trim().equals("")) {
@@ -48,117 +46,111 @@ public class Clinic {
         if (complaint == null || complaint.trim().equals("")) {
             throw new IllegalArgumentException("Complaint is required");
         }
-        int priority = dictionary.getPriority(complaint);
-        Patient p = new Patient(nextId, name.trim(), age, complaint.trim(), priority, clock);
-        nextId++;
-        allPatients.add(p);
-        queue.add(p);
-        return p;
+        int priority = complaintDictionary.getPriorityFor(complaint);
+        Patient patient = new Patient(nextPatientId, name.trim(), age, complaint.trim(), priority, clockMinutes);
+        nextPatientId++;
+        patientList.add(patient);
+        waitingQueue.add(patient);
+        return patient;
     }
 
-    // Waiting patients in the order they will be called.
-    public synchronized ArrayList<Patient> getWaiting() {
-        ArrayList<Patient> list = new ArrayList<Patient>(queue);
-        Collections.sort(list, order);
-        return list;
+    public synchronized ArrayList<Patient> getWaitingPatients() {
+        ArrayList<Patient> sortedList = new ArrayList<Patient>(waitingQueue);
+        Collections.sort(sortedList, patientOrder);
+        return sortedList;
     }
 
-    // Sends the most urgent patient to the first free doctor.
-    public synchronized Doctor callNext() {
-        Doctor free = null;
-        for (int i = 0; i < doctors.size(); i++) {
-            if (doctors.get(i).isFree()) {
-                free = doctors.get(i);
+    public synchronized Doctor callNextPatient() {
+        Doctor freeDoctor = null;
+        for (int index = 0; index < doctorList.size(); index++) {
+            if (doctorList.get(index).isFree()) {
+                freeDoctor = doctorList.get(index);
                 break;
             }
         }
-        if (free == null) {
+        if (freeDoctor == null) {
             throw new IllegalStateException("All doctors are busy");
         }
-        if (queue.isEmpty()) {
+        if (waitingQueue.isEmpty()) {
             throw new IllegalStateException("Nobody is waiting");
         }
 
-        Patient p = queue.poll();
-        int minutes = 35 - 5 * p.getPriority();     // priority 1 = 30 min ... priority 5 = 10 min
-        free.start(p, clock + minutes);
-        p.setStatus("IN_CONSULTATION");
+        Patient patient = waitingQueue.poll();
 
-        int waited = clock - p.getArrivalTime();
-        int level = p.getPriority();
-        seenByPriority[level]++;
-        waitByPriority[level] += waited;
-        if (waited > maxWaitByPriority[level]) {
-            maxWaitByPriority[level] = waited;
+        int consultationMinutes = 35 - 5 * patient.getPriority();
+        freeDoctor.startConsultation(patient, clockMinutes + consultationMinutes);
+        patient.setStatus("IN_CONSULTATION");
+
+        int waitedMinutes = clockMinutes - patient.getArrivalTime();
+        int priorityLevel = patient.getPriority();
+        seenCountByPriority[priorityLevel]++;
+        totalWaitByPriority[priorityLevel] += waitedMinutes;
+        if (waitedMinutes > maxWaitByPriority[priorityLevel]) {
+            maxWaitByPriority[priorityLevel] = waitedMinutes;
         }
-        return free;
+        return freeDoctor;
     }
 
-    // Moves the clock forward one minute at a time and frees doctors who are finished.
-    public synchronized void tick(int minutes) {
-        if (minutes < 1) {
+    public synchronized void advanceClock(int minutesToAdd) {
+        if (minutesToAdd < 1) {
             throw new IllegalArgumentException("Minutes must be at least 1");
         }
-        for (int m = 0; m < minutes; m++) {
-            clock++;
-            for (int i = 0; i < doctors.size(); i++) {
-                Doctor d = doctors.get(i);
-                if (!d.isFree() && clock >= d.getEndTime()) {
-                    d.getCurrent().setStatus("DONE");
-                    d.finish();
+        for (int minuteCount = 0; minuteCount < minutesToAdd; minuteCount++) {
+            clockMinutes++;
+            for (int index = 0; index < doctorList.size(); index++) {
+                Doctor doctor = doctorList.get(index);
+                if (!doctor.isFree() && clockMinutes >= doctor.getConsultationEndTime()) {
+                    doctor.getCurrentPatient().setStatus("DONE");
+                    doctor.finishConsultation();
                 }
             }
         }
     }
 
-    // Makes a waiting patient one step more urgent.
-    public synchronized Patient escalate(int id) {
-        Patient p = null;
-        for (int i = 0; i < allPatients.size(); i++) {
-            if (allPatients.get(i).getId() == id) {
-                p = allPatients.get(i);
+    public synchronized Patient escalatePatient(int patientId) {
+        Patient foundPatient = null;
+        for (int index = 0; index < patientList.size(); index++) {
+            if (patientList.get(index).getPatientId() == patientId) {
+                foundPatient = patientList.get(index);
             }
         }
-        if (p == null) {
-            throw new IllegalArgumentException("No patient with id " + id);
+        if (foundPatient == null) {
+            throw new IllegalArgumentException("No patient with id " + patientId);
         }
-        if (!p.getStatus().equals("WAITING")) {
-            throw new IllegalStateException("Patient " + id + " is not waiting");
+        if (!foundPatient.getStatus().equals("WAITING")) {
+            throw new IllegalStateException("Patient " + patientId + " is not waiting");
         }
-        if (p.getPriority() == 1) {
-            throw new IllegalStateException("Patient " + id + " is already at priority 1");
+        if (foundPatient.getPriority() == 1) {
+            throw new IllegalStateException("Patient " + patientId + " is already at priority 1");
         }
-        // The queue sorts only when a patient is added, so take the patient out and put back in.
-        queue.remove(p);
-        p.setPriority(p.getPriority() - 1);
-        queue.add(p);
-        return p;
+        waitingQueue.remove(foundPatient);
+        foundPatient.setPriority(foundPatient.getPriority() - 1);
+        waitingQueue.add(foundPatient);
+        return foundPatient;
     }
 
-    // ----- numbers for /stats -----
+    public synchronized int getWaitingCount() { return waitingQueue.size(); }
 
-    public synchronized int getWaitingCount() { return queue.size(); }
+    public synchronized int getSeenCount(int priorityLevel) { return seenCountByPriority[priorityLevel]; }
 
-    public synchronized int getSeen(int level) { return seenByPriority[level]; }
-
-    public synchronized int getTotalSeen() {
-        int total = 0;
-        for (int level = 1; level <= 5; level++) {
-            total += seenByPriority[level];
+    public synchronized int getTotalSeenCount() {
+        int totalSeenCount = 0;
+        for (int priorityLevel = 1; priorityLevel <= 5; priorityLevel++) {
+            totalSeenCount += seenCountByPriority[priorityLevel];
         }
-        return total;
+        return totalSeenCount;
     }
 
-    public synchronized double getAverageWait(int level) {
-        if (seenByPriority[level] == 0) {
+    public synchronized double getAverageWaitMinutes(int priorityLevel) {
+        if (seenCountByPriority[priorityLevel] == 0) {
             return 0;
         }
-        return (double) waitByPriority[level] / seenByPriority[level];
+        return (double) totalWaitByPriority[priorityLevel] / seenCountByPriority[priorityLevel];
     }
 
-    public synchronized int getMaxWait(int level) { return maxWaitByPriority[level]; }
+    public synchronized int getMaxWaitMinutes(int priorityLevel) { return maxWaitByPriority[priorityLevel]; }
 
-    public synchronized int getWaitedSoFar(Patient p) {
-        return clock - p.getArrivalTime();
+    public synchronized int getWaitedMinutes(Patient patient) {
+        return clockMinutes - patient.getArrivalTime();
     }
 }
