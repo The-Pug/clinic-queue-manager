@@ -1,11 +1,11 @@
+// One patient waiting at the clinic
 public class Patient {
     private int patientId;
     private String name;
     private int age;
     private String complaint;
-    private int priority;
-    private int arrivalTime;
-    private String status;
+    private int priority;      // 1 = most urgent, 5 = routine
+    private int arrivalTime;   // clock minute when the patient arrived
 
     public Patient(int patientId, String name, int age, String complaint, int priority, int arrivalTime) {
         this.patientId = patientId;
@@ -14,7 +14,6 @@ public class Patient {
         this.complaint = complaint;
         this.priority = priority;
         this.arrivalTime = arrivalTime;
-        this.status = "WAITING";
     }
 
     public int getPatientId() { return patientId; }
@@ -23,12 +22,4 @@ public class Patient {
     public String getComplaint() { return complaint; }
     public int getPriority() { return priority; }
     public int getArrivalTime() { return arrivalTime; }
-    public String getStatus() { return status; }
-
-    public void setPriority(int priority) { this.priority = priority; }
-    public void setStatus(String status) { this.status = status; }
-
-    public String toString() {
-        return "#" + patientId + " " + name;
-    }
 }

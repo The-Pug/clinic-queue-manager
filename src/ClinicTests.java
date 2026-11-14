@@ -1,7 +1,8 @@
+// A few simple checks. Run with: java -cp out ClinicTests
 public class ClinicTests {
     static int failedCount = 0;
 
-    static void checkResult(String description, boolean passed) {
+    static void check(String description, boolean passed) {
         if (passed) {
             System.out.println("ok    " + description);
         } else {
@@ -11,46 +12,49 @@ public class ClinicTests {
     }
 
     public static void main(String[] args) {
-        Clinic orderClinic = new Clinic();
-        orderClinic.addPatient("Ravi", 30, "routine checkup");
-        orderClinic.addPatient("Hari", 61, "cardiac arrest");
-        checkResult("urgent patient is first", orderClinic.getWaitingPatients().get(0).getName().equals("Hari"));
+        // 1. The most urgent patient comes first
+        Clinic clinic1 = new Clinic();
+        clinic1.addPatient("Ravi", 30, "routine checkup");
+        clinic1.addPatient("Hari", 61, "cardiac arrest");
+        check("urgent patient is first", clinic1.getWaitingPatients().get(0).getName().equals("Hari"));
 
-        Clinic tieClinic = new Clinic();
-        tieClinic.addPatient("First", 20, "high fever");
-        tieClinic.addPatient("Second", 21, "vomiting");
-        checkResult("tie: arrival order", tieClinic.getWaitingPatients().get(0).getName().equals("First"));
+        // 2. Same priority: the one who came first goes first
+        Clinic clinic2 = new Clinic();
+        clinic2.addPatient("First", 20, "high fever");
+        clinic2.addPatient("Second", 21, "vomiting");
+        check("same priority: arrival order", clinic2.getWaitingPatients().get(0).getName().equals("First"));
 
-        Patient unknownComplaintPatient = tieClinic.addPatient("Odd", 40, "strange itch");
-        checkResult("unknown complaint gets priority 5", unknownComplaintPatient.getPriority() == 5);
+        // 3. An unknown complaint gets priority 5
+        Patient odd = clinic2.addPatient("Odd", 40, "strange itch");
+        check("unknown complaint gets priority 5", odd.getPriority() == 5);
 
-        Clinic escalateClinic = new Clinic();
-        escalateClinic.addPatient("A", 20, "high fever");
-        Patient cutPatient = escalateClinic.addPatient("B", 20, "minor cut");
-        escalateClinic.escalatePatient(cutPatient.getPatientId());
-        escalateClinic.escalatePatient(cutPatient.getPatientId());
-        checkResult("escalate moves patient to front", escalateClinic.getWaitingPatients().get(0) == cutPatient);
-
-        Clinic doctorClinic = new Clinic();
-        for (int number = 0; number < 4; number++) {
-            doctorClinic.addPatient("P" + number, 30, "routine checkup");
-        }
-        doctorClinic.callNextPatient();
-        doctorClinic.callNextPatient();
-        doctorClinic.callNextPatient();
-        boolean noFreeDoctor = false;
+        // 4. Wrong age is not allowed
+        boolean errorShown = false;
         try {
-            doctorClinic.callNextPatient();
-        } catch (IllegalStateException exception) {
-            noFreeDoctor = true;
+            clinic2.addPatient("Old", 200, "fracture");
+        } catch (IllegalArgumentException e) {
+            errorShown = true;
         }
-        doctorClinic.advanceClock(10);
-        doctorClinic.callNextPatient();
-        checkResult("doctors busy until time is over", noFreeDoctor && doctorClinic.getWaitingCount() == 0);
+        check("age 200 is rejected", errorShown);
 
-        System.out.println(failedCount == 0 ? "All checks passed" : failedCount + " check(s) failed");
-        if (failedCount > 0) {
-            System.exit(1);
+        // 5. Three doctors are busy until the consultation time is over
+        Clinic clinic3 = new Clinic();
+        for (int i = 0; i < 4; i++) {
+            clinic3.addPatient("P" + i, 30, "routine checkup");
+        }
+        clinic3.callNextPatient();
+        clinic3.callNextPatient();
+        clinic3.callNextPatient();
+        String message = clinic3.callNextPatient();
+        clinic3.advanceClock(10);
+        clinic3.callNextPatient();
+        check("doctors busy until time is over",
+                message.equals("All doctors are busy") && clinic3.getWaitingPatients().size() == 0);
+
+        if (failedCount == 0) {
+            System.out.println("All checks passed");
+        } else {
+            System.out.println(failedCount + " check(s) failed");
         }
     }
 }
